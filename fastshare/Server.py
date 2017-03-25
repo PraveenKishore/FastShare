@@ -19,6 +19,7 @@ class  FastShareServer:
 
     def handlePeer(self, client, addr):
         self.peersAddr.add(addr)
+        print("Peer connected: {}".format(addr[0]))
 
     def displayAllPeers(self):
         for i in self.peersAddr:
