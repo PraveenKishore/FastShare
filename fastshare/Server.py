@@ -5,12 +5,20 @@ import sys
 defaultIP = "127.0.0.1"
 defaultPort = 1947
 
+initialServerIP = "127.0.0.1"
+initialServerPort = 1947
+
 if len(sys.argv) > 1:
     defaultIP = sys.argv[1]
 if len(sys.argv) > 2:
     defaultPort = int(sys.argv[2])
+if len(sys.argv) > 3:
+    initialServerIP = sys.argv[3]
+if len(sys.argv) > 4:
+    initialServerPort = sys.argv[4]
 
 SELF_SERVER_ADDR = (defaultIP, defaultPort)
+INITIAL_SERVER_ADDR = (initialServerIP, initialServerPort)
 
 class  FastShareServer:
     def __init__(self):
