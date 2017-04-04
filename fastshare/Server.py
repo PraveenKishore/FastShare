@@ -86,6 +86,6 @@ class  FastShareServer:
 if __name__=="__main__":
     fastShareServer = FastShareServer()
     Thread(target=fastShareServer.handleInput).start()
-    #fastShareServer.connectToPeer(("192.168.77.128", 1947))
+    fastShareServer.connectToPeer(("192.168.77.128", 1947))
     fastShareServer.startPeerServer()
     #fastShareServer.displayAllPeers()
