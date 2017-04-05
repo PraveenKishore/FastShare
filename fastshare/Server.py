@@ -24,6 +24,7 @@ class  FastShareServer:
     def __init__(self):
         self.serverSock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.peersAddr = set([])
+        self.fileName = None
         self.listenThread = None
         self.keepAlive = True
 
