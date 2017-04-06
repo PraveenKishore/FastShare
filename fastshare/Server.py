@@ -5,7 +5,7 @@ import sys
 defaultIP = "127.0.0.1"
 defaultPort = 1947
 
-initialServerIP = "127.0.0.1"
+initialServerIP = socket.INADDR_ANY
 initialServerPort = 1947
 
 if len(sys.argv) > 1:
