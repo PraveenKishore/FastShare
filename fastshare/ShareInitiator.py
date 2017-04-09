@@ -21,7 +21,8 @@ class FSServer:
         self.nParts = 5
         self.fileParts = [0] * self.nParts
         for i in range(0, self.nParts):
-            self.fileParts[i] = [0]
+            self.fileParts[i] = set()
+            self.fileParts[i].add(0)
 
     def startListening(self):
         self.registerClient(socket.gethostbyname(socket.gethostname()), self.port)
@@ -53,6 +54,7 @@ class FSServer:
             port = int(data.decode("utf-8"))
             if port < 0 or port > 65536:
                 raise ValueError
+            print("PORT: {}".format(port))
             id = self.registerClient(addr[0], port)
             client.send(id.encode("utf-8"))
         except ValueError:
@@ -79,12 +81,14 @@ class FSServer:
             if i == len(self.availableClients):
                 print("Client not registered")
                 raise socket.error
-            # print("Client ID: {}".format(id))
+            print("Client ID: {}".format(id))
             chunkNumber = self.getNextChunk(id)
             clientList = self.whoHas(chunkNumber)
             selected = random.randint(0, len(clientList)-1)
+            print("Chunk Number: {}".format(chunkNumber))
             msg = [chunkNumber, clientList[selected][1], clientList[selected][2]]
             client.send(str(msg).encode("utf-8"))
+            self.fileParts[chunkNumber].add(self.getIndexOfID(id))
         except socket.error:
             client.send("NACK".encode("utf-8"))
         client.close()
@@ -93,9 +97,9 @@ class FSServer:
         if self.fileParts == None:
             return
         index = self.getIndexOfID(id)
-        # print("INDEX: {}".format(index))
+        print("INDEX: {}".format(index))
         for i in range(0, self.nParts):
-            # print("Inspecting: {}".format(self.fileParts[i]))
+            print("Inspecting: {}".format(self.fileParts[i]))
             j = 0
             for p in self.fileParts[i]:
                 if p != index: j = j+1
@@ -149,7 +153,7 @@ class FSServer:
                     t = command.split(" ")
                     cn = int(t[1])
                     idin = int(t[2])
-                    self.fileParts[cn].append(idin)
+                    self.fileParts[cn].add(idin)
             except Exception as e:
                 print(e)
 
