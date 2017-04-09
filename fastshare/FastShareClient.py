@@ -26,7 +26,7 @@ class FSClient:
             clientSock.connect(SERVER_ADDR)
             clientSock.send("register".encode("utf-8"))
             clientSock.recv(5).decode("utf-8")
-            clientSock.send("1996".encode("utf-8"))
+            clientSock.send(str(self.port).encode("utf-8"))
             id = clientSock.recv(35).decode("utf-8")
             if id:
                 print("Registration successful with the server. ID received: {}".format(id))
@@ -54,6 +54,7 @@ class FSClient:
         ip = str(temp[1])
         port = int(temp[2])
         print("Chunk number: {}, ip: {}, port: {}".format(chunkNumber, ip, port))
+        return (chunkNumber, ip, port)
 
     def handlePeer(self, client, addr):
         print("Peer connected: {}".format(addr[0]))
@@ -65,7 +66,12 @@ class FSClient:
             if command == "": continue
 
 if __name__=="__main__":
-    fsc = FSClient(port=1999)
+    fsc = FSClient(1990)
     #threading.Thread(target=fsc.startListening).start()
     fsc.register()
-    fsc.getNextChunk()
+    l = []
+    for i in range(0, 6):
+        l.append(fsc.getNextChunk())
+
+    for i in l:
+        print(i)
