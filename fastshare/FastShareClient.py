@@ -35,3 +35,7 @@ class FSClient:
 if __name__=="__main__":
     clientSock = socket.socket()
     clientSock.connect(("127.0.0.1", 1996))
+    clientSock.send("register".encode("utf-8"))
+    print(clientSock.recv(5).decode("utf-8"))
+    clientSock.send("1996".encode("utf-8"))
+    print(clientSock.recv(5).decode("utf-8"))
