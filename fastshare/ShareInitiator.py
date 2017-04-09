@@ -157,6 +157,12 @@ class FSServer:
             except Exception as e:
                 print(e)
 
+    def shutdown(self):
+        self.keepAlive = False
+        self.serverSock.shutdown(socket.SHUT_RDWR)
+        self.serverSock.close()
+        print("Shutting down server")
+
 if __name__=="__main__":
     fss = FSServer()
     fss.prepareFile()
