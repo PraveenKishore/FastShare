@@ -5,7 +5,7 @@ class FSServer:
     def __init__(self, port=1996):
         self.port = port
         self.keepAlive = True
-        self.availableClients = set()
+        self.availableClients = []
         self.serverSock = socket.socket(socket.AF_INET, socket.SOCK_STREAM, 0)
         self.serverSock.bind(('0.0.0.0', self.port))
         self.serverSock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
@@ -15,13 +15,46 @@ class FSServer:
     def startListening(self):
         while self.keepAlive:
             client, addr = self.serverSock.accept()
-            threading.Thread(target=self.handleClient, args=(client, addr)).start()
+            client.settimeout(2)
+            try:
+                data = client.recv(25).decode("utf-8")
+                if data == "register":
+                    client.send("ACK".encode("utf-8"))
+                    threading.Thread(target=self.handleRegister, args=(client, addr)).start()
+                else:
+                    raise socket.error
+            except socket.timeout:
+                pass
+            except socket.error:
+                client.send("NACK".encode("utf-8"))
+                client.close()
+                pass
 
-    def handleClient(self, client, addr):
+    def handleRegister(self, client, addr):
         print("Client discovered: {}".format(addr[0]))
-        self.availableClients.add(addr[0])
+        try:
+            data = client.recv(20)
+            port = int(data.decode("utf-8"))
+            if port < 0 or port > 65536:
+                raise ValueError
+            self.registerClient(addr[0], port)
+            client.send("ACK".encode("utf-8"))
+        except ValueError:
+            client.send("NACK".encode("utf-8"))
+        except TypeError:
+            client.send("NACK".encode("utf-8"))
+        except socket.timeout:
+            client.send("NACK".encode("utf-8"))
+            pass
+        except socket.error:
+            pass
         client.close()
         pass
+
+    def registerClient(self, ip, port):
+        for c in self.availableClients:
+            if c[1] == ip and c[2] == port: return
+        self.availableClients.append((len(self.availableClients)+1, ip, port))
 
     def handleInput(self):
         while self.keepAlive:
