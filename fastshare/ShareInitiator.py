@@ -98,6 +98,18 @@ class FSServer:
             return
         index = self.getIndexOfID(id)
         print("INDEX: {}".format(index))
+        pending = self.getPendingChunksOf(index)
+        print(pending)
+        if len(pending) > 0:
+            rand = random.randint(0, len(pending)-1)
+            return pending[rand]
+        else: return -1
+
+    def oldGetNextChunk(self, id):
+        if self.fileParts == None:
+            return
+        index = self.getIndexOfID(id)
+        print("INDEX: {}".format(index))
         for i in range(0, self.nParts):
             print("Inspecting: {}".format(self.fileParts[i]))
             j = 0
@@ -121,6 +133,13 @@ class FSServer:
         print("Registered new client: {}, {}, {}".format(id, ip, port))
         return id
 
+    def getPendingChunksOf(self, index):
+        pending = []
+        for i in range(0, self.nParts):
+            if index not in self.fileParts[i]: pending.append(i)
+        return pending
+
+
     def getIndexOfID(self, id):
         for i in range(0, len(self.availableClients)):
             if self.availableClients[i][0] == id: return i
@@ -131,7 +150,7 @@ class FSServer:
             try:
                 command = input("").strip()
                 if command == "": print(self.fileParts); continue
-                if command == "list" or command == "list clients" or command == "whoall":
+                if command == "list" or command == "list clients" or command == "whoall" or command == "lc":
                     if len(self.availableClients) == 0:
                         print("No hosts discovered yet")
                     else:
@@ -149,6 +168,9 @@ class FSServer:
                     t = command.split(" ")
                     for i in self.whoHas(int(t[1])):
                         print(i)
+                elif command.startswith("remaining ") or command.startswith("p "):
+                    remaining = self.getPendingChunksOf(int(command.split(" ")[1]))
+                    print(remaining)
                 elif command.startswith("add "):
                     t = command.split(" ")
                     cn = int(t[1])
