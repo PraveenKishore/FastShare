@@ -70,7 +70,7 @@ class FSServer:
         pass
 
     def handleGetFileChunk(self, client, addr):
-        print("Received request for next chunk from: {}".format(addr[0]))
+        print("Received request for next chunk from: {}: ".format(addr[0]), end="")
         try:
             id = client.recv(35).decode("utf-8")
             i = 0
@@ -81,11 +81,11 @@ class FSServer:
             if i == len(self.availableClients):
                 print("Client not registered")
                 raise socket.error
-            print("Client ID: {}".format(id))
+            print("Client ID: {}, ".format(id), end="")
             chunkNumber = self.getNextChunk(id)
             clientList = self.whoHas(chunkNumber)
             selected = random.randint(0, len(clientList)-1)
-            print("Chunk Number: {}".format(chunkNumber))
+            print("Returning Chunk Number: {}".format(chunkNumber))
             msg = [chunkNumber, clientList[selected][1], clientList[selected][2]]
             client.send(str(msg).encode("utf-8"))
             self.fileParts[chunkNumber].add(self.getIndexOfID(id))
@@ -97,9 +97,9 @@ class FSServer:
         if self.fileParts == None:
             return
         index = self.getIndexOfID(id)
-        print("INDEX: {}".format(index))
+        # print("INDEX: {}".format(index))
         pending = self.getPendingChunksOf(index)
-        print(pending)
+        # print(pending)
         if len(pending) > 0:
             rand = random.randint(0, len(pending)-1)
             return pending[rand]
