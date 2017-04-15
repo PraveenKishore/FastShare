@@ -3,23 +3,56 @@ import threading
 import random
 import hashlib
 import time
+import os
+from builtins import Exception
+
 
 class FSServer:
-    def __init__(self, port=1996):
+    def __init__(self, port=1996, chunkSize=512):   # Specify chunkSize in terms of KB
         self.port = port
         self.keepAlive = True
         self.availableClients = []
         self.nParts = 0
         self.fileParts = []
+        self.chunkData = []
         self.rand = random
+        self.fileName = None
+        self.uploadCacheDir = ".Upload_Temp"
+        self.CHUNK_SIZE = chunkSize * 1024   # In bytes
         self.serverSock = socket.socket(socket.AF_INET, socket.SOCK_STREAM, 0)
         self.serverSock.bind(('0.0.0.0', self.port))
         self.serverSock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         self.serverSock.listen(50)
+        self.serverSock.settimeout(1)   # Wait for time out while shutting down
         print("Server started at {}".format(socket.gethostbyname(socket.gethostname())))
 
-    def prepareFile(self):
-        self.nParts = 5
+    def cleanupTempDir(self):
+        if not os.path.exists(self.uploadCacheDir):
+            return
+        tempFiles = os.listdir(self.uploadCacheDir)
+        for l in tempFiles:
+            os.remove(os.path.join(self.uploadCacheDir, l))
+        os.removedirs(self.uploadCacheDir)
+
+    def prepareFile(self, filePath=""):
+        if not os.path.exists(filePath):
+            raise FileNotFoundError
+        if not os.path.exists(self.uploadCacheDir):
+            os.mkdir(self.uploadCacheDir)
+        self.fileName = os.path.basename(filePath)
+        file = open(filePath, "rb")
+        n = 0
+        while True:
+            data = file.read(self.CHUNK_SIZE)
+            if not data: break
+            outFileName = "{}.dat".format(n)
+            outFilePath = os.path.join(self.uploadCacheDir, outFileName)
+            out = open(outFilePath, "wb")
+            out.write(data)
+            out.close()
+            n = n+1
+        file.close()
+        self.nParts = n
         self.fileParts = [0] * self.nParts
         for i in range(0, self.nParts):
             self.fileParts[i] = set()
@@ -29,8 +62,10 @@ class FSServer:
         self.registerClient(socket.gethostbyname(socket.gethostname()), self.port)
         ## 3 Options: register, getNextChunk, ackFileChunk
         while self.keepAlive:
-            client, addr = self.serverSock.accept()
-            client.settimeout(2)
+            try:
+                client, addr = self.serverSock.accept()
+            except socket.timeout: continue
+            client.settimeout(1)
             try:
                 data = client.recv(25).decode("utf-8")
                 if data == "register":
@@ -39,6 +74,12 @@ class FSServer:
                 elif data == "getNextChunk":
                     client.send("ACK".encode("utf-8"))
                     threading.Thread(target=self.handleGetFileChunk, args=(client, addr)).start()
+                elif data == "fetchChunk":
+                    client.send("ACK".encode("utf-8"))
+                    threading.Thread(target=self.handleChunkTransfer, args=(client, addr)).start()
+                elif data == "notifyReceived":
+                    client.send("ACK".encode("utf-8"))
+                    threading.Thread(target=self.handleNotifyReceived, args=(client, addr)).start()
                 else:
                     raise socket.error
             except socket.timeout:
@@ -58,6 +99,8 @@ class FSServer:
             print("PORT: {}".format(port))
             id = self.registerClient(addr[0], port)
             client.send(id.encode("utf-8"))
+            client.recv(5)
+            client.send(self.fileName.encode("utf-8"))
         except ValueError:
             client.send("NACK".encode("utf-8"))
         except TypeError:
@@ -70,8 +113,44 @@ class FSServer:
         client.close()
         pass
 
+    def handleChunkTransfer(self, client, addr):
+        print("Request for chunk from: {} ".format(addr[0]), end="")
+        try:
+            chunkNumber = int(client.recv(10).decode("utf-8"))
+            if chunkNumber >= self.nParts or chunkNumber < 0: raise IndexError
+            print("Chunk Number: {}".format(chunkNumber))
+            client.send("ACK".encode("utf-8"))
+        except Exception as e:
+            print(e)
+            client.send("NACK".encode("utf-8"))
+            client.close()
+            return
+        chunkPath = os.path.join(self.uploadCacheDir, "{}.dat".format(chunkNumber))
+        file = open(chunkPath, "rb")
+        client.sendfile(file)
+        file.close()
+        client.close()
+
+    def handleNotifyReceived(self, client, addr):
+        print("Notified of chunk received from: {}".format(addr[0]))
+        try:
+            id = client.recv(35).decode("utf-8")
+            client.send("ACK".encode("utf-8"))
+            chunkNumber = int(client.recv(5).decode("utf-8"))
+            if chunkNumber >= self.nParts and chunkNumber < 0:
+                raise IndexError
+            index = self.getIndexOfID(id)
+            if index < 0: raise ValueError
+            client.send("ACK".encode("utf-8"))
+        except Exception as e:
+            print(e)
+            client.send("NACK".encode("utf-8"))
+            return
+        self.fileParts[chunkNumber].add(index)
+        client.close()
+
     def handleGetFileChunk(self, client, addr):
-        print("Received request for next chunk from: {}: ".format(addr[0]), end="")
+        print("Received request for next chunk data from: {}: ".format(addr[0]), end="")
         try:
             id = client.recv(35).decode("utf-8")
             i = 0
@@ -89,7 +168,7 @@ class FSServer:
             print("Returning Chunk Number: {}".format(chunkNumber))
             msg = [chunkNumber, clientList[selected][1], clientList[selected][2]]
             client.send(str(msg).encode("utf-8"))
-            self.fileParts[chunkNumber].add(self.getIndexOfID(id))
+            # self.fileParts[chunkNumber].add(self.getIndexOfID(id))
         except socket.error:
             client.send("NACK".encode("utf-8"))
         client.close()
@@ -172,6 +251,10 @@ class FSServer:
                 elif command.startswith("remaining ") or command.startswith("p "):
                     remaining = self.getPendingChunksOf(int(command.split(" ")[1]))
                     print(remaining)
+                elif command == "cleanup":
+                    self.cleanupTempDir()
+                elif command == "exit":
+                    self.shutdown()
                 elif command.startswith("add "):
                     t = command.split(" ")
                     cn = int(t[1])
@@ -181,13 +264,14 @@ class FSServer:
                 print(e)
 
     def shutdown(self):
-        self.keepAlive = False
-        self.serverSock.shutdown(socket.SHUT_RDWR)
-        self.serverSock.close()
         print("Shutting down server")
+        self.keepAlive = False
+        time.sleep(1.2) # Server socket time out is 1 second. Wait until startListening loop exits
+        self.serverSock.close()
 
 if __name__=="__main__":
-    fss = FSServer(port=1990)
-    fss.prepareFile()
+    fss = FSServer(port=1990, chunkSize=1 * 1024)    # 1KB chunks
+    fss.cleanupTempDir()
+    fss.prepareFile("C:\\Users\\PraveenHari\\Desktop\\DemiLe.mp4")
     threading.Thread(target=fss.startListening).start()
     threading.Thread(target=fss.handleInput).start()
