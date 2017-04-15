@@ -11,6 +11,7 @@ class FSServer:
         self.availableClients = []
         self.nParts = 0
         self.fileParts = []
+        self.rand = random
         self.serverSock = socket.socket(socket.AF_INET, socket.SOCK_STREAM, 0)
         self.serverSock.bind(('0.0.0.0', self.port))
         self.serverSock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
@@ -84,7 +85,7 @@ class FSServer:
             print("Client ID: {}, ".format(id), end="")
             chunkNumber = self.getNextChunk(id)
             clientList = self.whoHas(chunkNumber)
-            selected = random.randint(0, len(clientList)-1)
+            selected = self.rand.randint(0, len(clientList)-1)
             print("Returning Chunk Number: {}".format(chunkNumber))
             msg = [chunkNumber, clientList[selected][1], clientList[selected][2]]
             client.send(str(msg).encode("utf-8"))
@@ -101,7 +102,7 @@ class FSServer:
         pending = self.getPendingChunksOf(index)
         # print(pending)
         if len(pending) > 0:
-            rand = random.randint(0, len(pending)-1)
+            rand = self.rand.randint(0, len(pending)-1)
             return pending[rand]
         else: return -1
 
@@ -130,7 +131,7 @@ class FSServer:
             if c[1] == ip and c[2] == port: return c[0]
         id = hashlib.md5(str(time.time()+random.random()).encode()).hexdigest()
         self.availableClients.append((id, ip, port))
-        print("Registered new client: {}, {}, {}".format(id, ip, port))
+        print("Registered new client: {}, {}:{}".format(id, ip, port))
         return id
 
     def getPendingChunksOf(self, index):
@@ -186,7 +187,7 @@ class FSServer:
         print("Shutting down server")
 
 if __name__=="__main__":
-    fss = FSServer()
+    fss = FSServer(port=1990)
     fss.prepareFile()
     threading.Thread(target=fss.startListening).start()
     threading.Thread(target=fss.handleInput).start()
