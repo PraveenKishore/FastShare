@@ -1,7 +1,7 @@
 import socket
 import threading
 
-SERVER_ADDR = ("127.0.0.1", 1996)
+SERVER_ADDR = ("127.0.0.1", 1990)
 
 class FSClient:
     def __init__(self, port=1996):
@@ -12,7 +12,8 @@ class FSClient:
         self.serverSock.bind(('0.0.0.0', self.port))
         self.serverSock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         self.serverSock.listen(50)
-        print("File peer started at {}".format(socket.gethostbyname(socket.gethostname())))
+        self.ipAddress = socket.gethostbyname(socket.gethostname())
+        print("File peer started at {}:{}".format(self.ipAddress, self.port))
 
     def startListening(self):
         while self.keepAlive:
@@ -29,7 +30,7 @@ class FSClient:
             clientSock.send(str(self.port).encode("utf-8"))
             id = clientSock.recv(35).decode("utf-8")
             if id:
-                print("Registration successful with the server. ID received: {}".format(id))
+                print("Registration successful with the server. ID received: {}\t{}:{}".format(id, self.ipAddress, self.port))
                 self.id = id
             else:
                 raise socket.error
@@ -41,7 +42,7 @@ class FSClient:
         if not self.id:
             print("Please register first!")
             return
-        print("Requesting next chunk")
+        print("({}:{}): Requesting next chunk.. ".format(self.ipAddress, self.port), end="")
         clientSock = socket.socket(socket.AF_INET, socket.SOCK_STREAM, 0)
         clientSock.connect(SERVER_ADDR)
         clientSock.send("getNextChunk".encode("utf-8"))
@@ -53,7 +54,7 @@ class FSClient:
         chunkNumber = int(temp[0])
         ip = str(temp[1])
         port = int(temp[2])
-        print("Chunk number: {}, ip: {}, port: {}".format(chunkNumber, ip, port))
+        print("Chunk number: {}, from ip: {}, port: {}".format(chunkNumber, ip, port))
         return (chunkNumber, ip, port)
 
     def handlePeer(self, client, addr):
@@ -66,12 +67,21 @@ class FSClient:
             if command == "": continue
 
 if __name__=="__main__":
-    fsc = FSClient(1990)
-    #threading.Thread(target=fsc.startListening).start()
-    fsc.register()
-    l = []
-    for i in range(0, 6):
-        l.append(fsc.getNextChunk())
+    # fsc = FSClient(1990)
+    # threading.Thread(target=fsc.startListening).start()
+    # fsc.register()
+    # l = []
+    # for i in range(0, 6):
+    #     l.append(fsc.getNextChunk())
 
-    for i in l:
-        print(i)
+    # for i in l:
+    #   print(i)
+    f = []
+    for i in range(1995, 2000):
+        temp = FSClient(port=i)
+        temp.register()
+        f.append(temp)
+
+    for i in range(0, 1):
+        for c in f:
+            c.getNextChunk()
