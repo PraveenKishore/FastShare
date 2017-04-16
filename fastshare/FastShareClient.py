@@ -2,8 +2,28 @@ import socket
 import threading
 import os
 import time
+import sys
 
-SERVER_ADDR = ("127.0.0.1", 1990)
+clientPort = 1992
+serverIp = "127.0.0.1"
+serverPort = 1990
+
+try:
+    if len(sys.argv) == 2:
+        clientPort = int(sys.argv[1])
+    if len(sys.argv) == 3:
+        serverIp = sys.argv[2]
+    if len(sys.argv) >= 4:
+        serverIp = sys.argv[2]
+        serverPort = int(sys.argv[3])
+except KeyboardInterrupt:
+    sys.exit(0)
+except Exception:
+    print("FastShareClient")
+    print("{} [Client Port] [Server IP] [Server Port]".format(sys.argv[0]))
+    sys.exit(-1)
+
+SERVER_ADDR = (serverIp, serverPort)
 
 class FSClient:
     def __init__(self, port=1996):
@@ -26,6 +46,7 @@ class FSClient:
         while self.keepAlive:
             try:
                 client, addr = self.serverSock.accept()
+                client.settimeout(2)
             except socket.error:
                 continue
             threading.Thread(target=self.handlePeer, args=(client, addr)).start()
@@ -48,8 +69,10 @@ class FSClient:
             self.fileToReceiveName = clientSock.recv(150).decode("utf-8")
             print("File name to receive: {}".format(self.fileToReceiveName))
             clientSock.close()
+            return True
         except socket.error:
             print("Registration unsuccessful with the server")
+            return False
 
     def getNextChunk(self):
         if not self.id:
@@ -57,6 +80,7 @@ class FSClient:
             return
         print("({}:{}): Requesting next chunk.. ".format(self.ipAddress, self.port), end="")
         clientSock = socket.socket(socket.AF_INET, socket.SOCK_STREAM, 0)
+        clientSock.settimeout(2)
         clientSock.connect(SERVER_ADDR)
         clientSock.send("getNextChunk".encode("utf-8"))
         clientSock.recv(5).decode("utf-8")
@@ -100,7 +124,7 @@ class FSClient:
             # if chunkNumber in self.receivedChunks: raise IndexError
             # print("Chunk Number to send: {}".format(chunkNumber))
             client.send("ACK".encode("utf-8"))
-        except Exception as e:
+        except ValueError as e:
             print(e)
             client.send("NACK".encode("utf-8"))
             client.close()
@@ -113,6 +137,7 @@ class FSClient:
 
     def notifyChunkReceived(self, chunkNumber):
         clientSock = socket.socket(socket.AF_INET, socket.SOCK_STREAM, 0)
+        clientSock.settimeout(2)
         clientSock.connect(SERVER_ADDR)
         clientSock.send("notifyReceived".encode("utf-8"))
         data = clientSock.recv(5).decode("utf-8")
@@ -127,6 +152,7 @@ class FSClient:
 
     def fetchChunk(self, chunkNumber, ip, port):
         clientSock = socket.socket(socket.AF_INET, socket.SOCK_STREAM, 0)
+        clientSock.settimeout(2)
         clientSock.connect((ip, port))
         clientSock.send("fetchChunk".encode("utf-8"))
         clientSock.recv(5).decode("utf-8")
@@ -184,77 +210,45 @@ class FSClient:
 
     def startReceiving(self):
         start = time.time()
-        while True:
+        while self.keepAlive:
             (chunkNumber, ip, port) = self.getNextChunk()
             if chunkNumber == -1: break
-            self.fetchChunk(chunkNumber, ip, port)
+            try:
+                self.fetchChunk(chunkNumber, ip, port)
+            except socket.timeout:
+                print("Timed out while fetching chunk. Peer {}:{} might not active".format(ip, port))
+                continue
+            except KeyboardInterrupt:
+                self.shutdown()
+                sys.exit(0)
         self.assembleFile()
         end = time.time()
         elapsed = end - start
         print("Elapsed time: {}".format(elapsed))
 
     def handleInput(self):
-        while self.keepAlive:
-            command = input("").strip()
-            if command == "": continue
-            elif command == "exit":
-                self.shutdown()
-
-f = []
-
-def run():
-    for i in range(1995, 2000):
-        temp = FSClient(port=i)
-        threading.Thread(target=temp.startListening).start()
-        temp.cleanupTempDir()
-        temp.register()
-        temp.prepareTempDir()
-        f.append(temp)
-
-    done = []
-
-    for i in range(0, 5):
-        for c in f:
-            # c.getNextChunk()
-            if c in done: continue
-            (chunkNumber, ip, port) = c.getNextChunk()
-            if chunkNumber == -1:
-                done.append(c)
-                c.assembleFile()
-            else:
-                c.fetchChunk(chunkNumber, ip, port)
-            # input("Press any key to fetch next chunks")
-
-    for c in f:
-        c.shutdown()
-
-def runMultiple():
-    for i in range(1995, 2000):
-        temp = FSClient(port=i)
-        threading.Thread(target=temp.startListening).start()
-        temp.cleanupTempDir()
-        temp.register()
-        temp.prepareTempDir()
-        f.append(temp)
-        threading.Thread(target=temp.startReceiving).start()
+        try:
+            while self.keepAlive:
+                command = input("").strip()
+                if command == "": continue
+                elif command == "exit":
+                    self.shutdown()
+                elif command == "clear" or command == "cls":
+                    if os.name == "nt": os.system("cls")
+                    else: os.system("clear")
+                elif command.startswith("e "):
+                    os.system(command[2:])
+        except Exception:
+            self.shutdown()
 
 if __name__=="__main__":
-    # fsc = FSClient(1990)
-    # threading.Thread(target=fsc.startListening).start()
-    # fsc.register()
-    # l = []
-    # for i in range(0, 6):
-    #     l.append(fsc.getNextChunk())
-
-    # for i in l:
-    #   print(i)
-    threading.Thread(target=runMultiple).start()
-    while True:
-        command = input("").strip()
-        if command == "":
-            continue
-        elif command == "exit":
-            for c in f:
-                c.shutdown()
-            break
+    fsclient = FSClient(port=clientPort)
+    threading.Thread(target=fsclient.startListening).start()
+    threading.Thread(target=fsclient.handleInput).start()
+    fsclient.cleanupTempDir()
+    if not fsclient.register():
+        sys.exit(0)
+    fsclient.prepareTempDir()
+    fsclient.startReceiving()
+    pass
 

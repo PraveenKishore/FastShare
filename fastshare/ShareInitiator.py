@@ -4,7 +4,7 @@ import random
 import hashlib
 import time
 import os
-from builtins import Exception
+import sys
 
 
 class FSServer:
@@ -24,7 +24,7 @@ class FSServer:
         self.serverSock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         self.serverSock.listen(50)
         self.serverSock.settimeout(1)   # Wait for time out while shutting down
-        print("Server started at {}".format(socket.gethostbyname(socket.gethostname())))
+        print("Server started at {}:{}".format(socket.gethostbyname(socket.gethostname()), self.port))
 
     def cleanupTempDir(self):
         if not os.path.exists(self.uploadCacheDir):
@@ -117,10 +117,10 @@ class FSServer:
         print("Request for chunk from: {} ".format(addr[0]), end="")
         try:
             chunkNumber = int(client.recv(10).decode("utf-8"))
-            if chunkNumber >= self.nParts or chunkNumber < 0: raise IndexError
+            if chunkNumber >= self.nParts or chunkNumber < 0: raise ValueError
             print("Chunk Number: {}".format(chunkNumber))
             client.send("ACK".encode("utf-8"))
-        except Exception as e:
+        except ValueError as e:
             print(e)
             client.send("NACK".encode("utf-8"))
             client.close()
@@ -138,11 +138,11 @@ class FSServer:
             client.send("ACK".encode("utf-8"))
             chunkNumber = int(client.recv(5).decode("utf-8"))
             if chunkNumber >= self.nParts and chunkNumber < 0:
-                raise IndexError
+                raise ValueError
             index = self.getIndexOfID(id)
             if index < 0: raise ValueError
             client.send("ACK".encode("utf-8"))
-        except Exception as e:
+        except ValueError as e:
             print(e)
             client.send("NACK".encode("utf-8"))
             return
@@ -238,11 +238,17 @@ class FSServer:
                 elif command == "list data" or command == "whatall" or command == "ld":
                     for i in range(0, self.nParts):
                         print("{}: {}".format(i, self.fileParts[i]))
+                elif command == "list files" or command == "whichall" or command == "lf":
+                    print("Chunk data files: ")
+                    for i in range(0, self.nParts):
+                        path = os.path.join(self.uploadCacheDir, "{}.dat".format(i))
+                        print(path)
+                    print("File to transfer: {}".format(self.fileName))
                 elif command.startswith("whois "):
                     try:
                         index = int(command.split(" ")[1])
                         print(self.availableClients[index])
-                    except Exception:
+                    except ValueError:
                         print("Client does not exist!")
                 elif command.startswith("whohas "):
                     t = command.split(" ")
@@ -255,13 +261,21 @@ class FSServer:
                     self.cleanupTempDir()
                 elif command == "exit":
                     self.shutdown()
+                elif command == "clear" or command == "cls":
+                    if os.name == "nt": os.system("cls")
+                    else: os.system("clear")
+                elif command.startswith("e "):
+                    os.system(command[2:])
                 elif command.startswith("add "):
                     t = command.split(" ")
                     cn = int(t[1])
                     idin = int(t[2])
                     self.fileParts[cn].add(idin)
+            except EOFError:
+                self.shutdown()
+                sys.exit(0)
             except Exception as e:
-                print(e)
+                print("Exception: {}".format(e))
 
     def shutdown(self):
         print("Shutting down server")
@@ -270,8 +284,27 @@ class FSServer:
         self.serverSock.close()
 
 if __name__=="__main__":
-    fss = FSServer(port=1990, chunkSize=1 * 1024)    # 1KB chunks
+    filePath = "C:\\Users\\PraveenHari\\Desktop\\DemiLe.mp4"
+    ip = "0.0.0.0"
+    port = 1990
+    chunkSize = 1
+    try:
+        if len(sys.argv) >= 2:
+            if not os.path.exists(sys.argv[1]):
+                print("File not found!")
+                sys.exit(-1)
+            filePath = sys.argv[1]
+
+        if len(sys.argv) >= 3:
+            port = int(sys.argv[2])
+        if len(sys.argv) >= 4:
+            chunkSize = int(sys.argv[3])
+    except ValueError:
+        print("Fast Share Initiator")
+        print("{} fileName [Port] [Chunk Size in MB]".format(sys.argv[0]))
+        sys.exit(0)
+    fss = FSServer(port=port, chunkSize=chunkSize * 1024)    # n MB chunks
     fss.cleanupTempDir()
-    fss.prepareFile("C:\\Users\\PraveenHari\\Desktop\\DemiLe.mp4")
+    fss.prepareFile(filePath)
     threading.Thread(target=fss.startListening).start()
     threading.Thread(target=fss.handleInput).start()
