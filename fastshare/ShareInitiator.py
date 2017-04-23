@@ -5,6 +5,8 @@ import hashlib
 import time
 import os
 import sys
+#https://www.youtube.com/watch?v=vIEdhlS-zYA
+#https://www.youtube.com/watch?v=PV8orIP6ebc
 
 
 class FSServer:
@@ -287,7 +289,7 @@ if __name__=="__main__":
     filePath = "C:\\Users\\PraveenHari\\Desktop\\DemiLe.mp4"
     ip = "0.0.0.0"
     port = 1990
-    chunkSize = 1
+    chunkSize = 6
     try:
         if len(sys.argv) >= 2:
             if not os.path.exists(sys.argv[1]):
